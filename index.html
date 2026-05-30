@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Launcher</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html, body { width:100%; min-height:100%; }
+    body {
+      background-color: #1a1a1e;
+      background-image:
+        radial-gradient(ellipse at 20% 20%, rgba(60,70,90,0.35) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 80%, rgba(40,50,70,0.30) 0%, transparent 60%);
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 12px 8px 24px;
+    }
+    #launcher {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px; width: 100%; max-width: 420px;
+    }
+    .app-cell {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: flex-end;
+      padding: 10px 6px 10px;
+      background: linear-gradient(160deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%);
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.07);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 4px 12px rgba(0,0,0,0.4);
+      text-decoration: none; cursor: pointer;
+      position: relative; overflow: hidden;
+      aspect-ratio: 1/1;
+      transition: transform 0.12s ease;
+    }
+    .app-cell::before {
+      content:''; position:absolute; inset:0;
+      background: radial-gradient(circle at 50% 0%, rgba(255,255,255,0.10) 0%, transparent 65%);
+      pointer-events:none;
+    }
+    .app-cell:active { transform: scale(0.93); }
+    .icon-wrap {
+      flex:1; display:flex; align-items:center; justify-content:center; width:100%;
+    }
+    .icon-wrap img {
+      width:62%; max-width:64px; height:auto; object-fit:contain;
+      border-radius:12px; filter:drop-shadow(0 4px 8px rgba(0,0,0,0.5));
+    }
+    .app-label {
+      font-size:11px; color:rgba(255,255,255,0.82); text-align:center;
+      letter-spacing:0.3px; margin-top:6px; width:100%;
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+      text-shadow:0 1px 3px rgba(0,0,0,0.7);
+    }
+    #msg { color:rgba(255,255,255,0.3); font-size:11px; text-align:center; padding:16px; }
+  </style>
+</head>
+<body>
+<div id="launcher"></div>
+<div id="msg"></div>
+
+<!--
+  names.txt debe estar en la misma carpeta que este index.html
+  Formato (una línea por app):
+    01	CMD
+    02	Hal 9000
+    03	Pixaroma
+    04	Mi App
+
+  Se usa un <script src> para leerlo como JS.
+  Para que funcione desde file://, el archivo se llama "names.js"
+  y contiene:  window.NAMES_RAW = `...contenido...`;
+
+  SI el usuario tiene names.txt (no names.js), la alternativa es
+  que el script intente leerlo de ambas formas.
+-->
+
+<!-- Intento 1: cargar names.js (modo file://) -->
+<script>window.NAMES_RAW = null;</script>
+<script src="names.js" onerror="/* ignorar si no existe */"></script>
+
+<script>
+(function() {
+
+  // ── PASO 1: obtener texto de names ───────────────────────────────────────────
+  // Estrategia A: names.js ya lo dejó en window.NAMES_RAW
+  // Estrategia B: fetch() para servidores HTTP
+  // Estrategia C: XMLHttpRequest sincrónico (funciona en file:// en algunos casos)
+
+  function parseTxt(text) {
+    const map = {};
+    if (!text) return map;
+    text.split(/\r?\n/).forEach(rawLine => {
+      const line = rawLine.trim();
+      if (!line) return;
+      let num = '', name = '';
+      // Separar por TAB primero
+      if (line.includes('\t')) {
+        const parts = line.split('\t').map(p => p.trim()).filter(p => p && p !== '-' && p !== '–');
+        if (parts.length >= 2) {
+          num  = parts[0].replace(/\D/g, '');
+          name = parts.slice(1).join(' ').trim();
+        }
+      } else {
+        // Sin tab: "01 - Nombre" o "01 Nombre"
+        const m = line.match(/^(\d+)\s*[-–]?\s+(.+)$/);
+        if (m) { num = m[1]; name = m[2].trim(); }
+      }
+      if (num && name) map[num.padStart(2,'0')] = name;
+    });
+    return map;
+  }
+
+  function buildLauncher(nameMap) {
+    const launcher = document.getElementById('launcher');
+    const msg      = document.getElementById('msg');
+
+    // Claves del txt + siempre intentar 01-03
+    // Además probar hasta 99 para detectar carpetas sin entrada en txt
+    // (el ícono decide si se muestra o no)
+    const fromTxt = Object.keys(nameMap).sort();
+    const base    = ['01','02','03'];
+    // Generar candidatos: unión de base + txt + números hasta el mayor del txt + 5
+    let maxN = 3;
+    fromTxt.forEach(k => { const n = parseInt(k,10); if(n > maxN) maxN = n; });
+    maxN = Math.min(maxN + 5, 99); // buscar 5 más allá del último definido en txt
+
+    const candidates = new Set([...base]);
+    for (let i = 1; i <= maxN; i++) candidates.add(String(i).padStart(2,'0'));
+    fromTxt.forEach(k => candidates.add(k));
+
+    const allKeys = [...candidates].sort();
+    const pending = [];
+
+    allKeys.forEach(num => {
+      const label    = nameMap[num] || num;
+      const iconSrc  = num + '/icon.png';
+
+      const cell     = document.createElement('a');
+      cell.className = 'app-cell';
+      cell.href      = num + '/index.html';
+      cell.style.visibility = 'hidden';
+
+      const wrap     = document.createElement('div');
+      wrap.className = 'icon-wrap';
+
+      const img      = document.createElement('img');
+      img.alt        = label;
+
+      const lbl      = document.createElement('span');
+      lbl.className  = 'app-label';
+      lbl.textContent = label;
+
+      wrap.appendChild(img);
+      cell.appendChild(wrap);
+      cell.appendChild(lbl);
+      launcher.appendChild(cell);
+
+      const p = new Promise(resolve => {
+        img.onload  = () => resolve({ cell, ok: true });
+        img.onerror = () => resolve({ cell, ok: false });
+        img.src = iconSrc;
+      });
+      pending.push(p);
+    });
+
+    Promise.all(pending).then(results => {
+      let shown = 0;
+      results.forEach(({ cell, ok }) => {
+        if (ok) { cell.style.visibility = 'visible'; shown++; }
+        else    { cell.remove(); }
+      });
+      // Relleno para última fila incompleta
+      const rem = shown % 3;
+      if (rem > 0) {
+        for (let i = 0; i < 3 - rem; i++) {
+          const sp = document.createElement('div');
+          sp.style.aspectRatio = '1/1';
+          launcher.appendChild(sp);
+        }
+      }
+      if (shown === 0) msg.textContent = 'No se encontraron iconos.';
+    });
+  }
+
+  // ── PASO 2: intentar obtener el texto y arrancar ─────────────────────────────
+
+  // A) names.js ya cargó window.NAMES_RAW
+  if (window.NAMES_RAW) {
+    buildLauncher(parseTxt(window.NAMES_RAW));
+    return;
+  }
+
+  // B) XMLHttpRequest sincrónico — funciona en file:// en Firefox y Edge,
+  //    y en Chrome si se lanzó con --allow-file-access-from-files
+  //    (Chrome normal desde file:// lo bloquea igual, pero vale intentarlo)
+  try {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', 'names.txt', false);  // sincrónico
+    xhr.send();
+    if (xhr.status === 200 || xhr.status === 0) { // status 0 = file://
+      buildLauncher(parseTxt(xhr.responseText));
+      return;
+    }
+  } catch(e) { /* bloqueado */ }
+
+  // C) fetch() — funciona en HTTP
+  fetch('names.txt')
+    .then(r => r.text())
+    .then(t => buildLauncher(parseTxt(t)))
+    .catch(() => {
+      // Sin names.txt de ninguna forma: mostrar igual, usar números
+      document.getElementById('msg').innerHTML =
+        '<b>names.txt no se pudo leer.</b><br>' +
+        'Renómbralo a <b>names.js</b> y agrega esta línea al inicio:<br>' +
+        '<code>window.NAMES_RAW = `...contenido...`;</code>';
+      buildLauncher({});
+    });
+
+})();
+</script>
+</body>
+</html>

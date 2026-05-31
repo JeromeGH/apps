@@ -2,9 +2,9 @@
 // Edita solo el contenido entre las comillas invertidas (`...`)
 // Mismo formato que names.txt: número TAB nombre, una línea por app
 
-window.NAMES_RAW = `01	CMD
-02	Hal 9000
-03	Pixaroma
+window.NAMES_RAW = `01	Calco App
+02	Solucionador.CL
+03	Calificación Viviendas
 04	Mi App 04
-05	Otra App 05 mejor
+05	Mi App 05
 `;

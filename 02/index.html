@@ -1,1 +1,119 @@
-hola -- 02
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solución de Problemas (según Chile)</title>
+	<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        h1 { color: #333; }
+        #question { font-size: 1.2em; margin: 20px 0; }
+        button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        #noButton { background-color: #f44336; }
+        #history { text-align: left; margin-top: 20px; }
+        #result {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .success { background-color: #dff0d8; color: #3c763d; }
+        .danger { background-color: #f2dede; color: #a94442; }
+    </style>
+</head>
+<body>
+    <h1>Solución de Problemas (según Chile)</h1>
+    <div id="questionContainer">
+        <p id="question"></p>
+        <button id="yesButton" onclick="handleChoice('yes')">Sí</button>
+        <button id="noButton" onclick="handleChoice('no')">No</button>
+    </div>
+    <div id="result"></div>
+    <div id="history">
+        <h3>Historial de decisiones:</h3>
+        <ul id="historyList"></ul>
+    </div>
+
+    <script>
+        const steps = {
+            start: { question: '¿La Cosa Funciona?', yes: 'arreglo', no: 'trataste' },
+            arreglo: { question: '¿Se Arregló?', yes: 'resuelto', no: 'culpar' },
+            trataste: { question: '¿Trataste de Arreglarlo?', yes: 'arreglo', no: 'alguien' },
+            culpar: { question: '¿Se Puede Culpar a Otro?', yes: 'resuelto', no: 'esconder' },
+            alguien: { question: '¿Lo Sabe Alguien Más?', yes: 'culpar2', no: 'resuelto' },
+            culpar2: { question: '¿Te Pueden Culpar?', yes: 'esconder', no: 'resuelto' },
+            esconder: { question: '¿Puedes Tirarlo y esconderlo?', yes: 'resuelto', no: 'problema' },
+            problema: { result: 'Tienes un gran problema', class: 'danger' },
+            resuelto: { result: 'Problema Resuelto', class: 'success' }
+        };
+
+        let currentStep = 'start';
+        const history = [];
+
+        function updateQuestion() {
+            const step = steps[currentStep];
+            if (step.question) {
+                document.getElementById('question').textContent = step.question;
+                document.getElementById('questionContainer').style.display = 'block';
+                document.getElementById('result').style.display = 'none';
+            } else {
+                document.getElementById('questionContainer').style.display = 'none';
+                const resultElement = document.getElementById('result');
+                resultElement.textContent = step.result;
+                resultElement.className = step.class;
+                resultElement.style.display = 'block';
+            }
+        }
+
+        function handleChoice(choice) {
+            history.push({ step: currentStep, choice: choice });
+            updateHistory();
+            if (choice === 'yes') {
+                currentStep = steps[currentStep].yes;
+            } else {
+                currentStep = steps[currentStep].no;
+            }
+            updateQuestion();
+        }
+
+        function updateHistory() {
+            const historyList = document.getElementById('historyList');
+            historyList.innerHTML = '';
+            history.forEach(item => {
+                const li = document.createElement('li');
+                li.textContent = `${steps[item.step].question}: ${item.choice === 'yes' ? 'Sí' : 'No'}`;
+                historyList.appendChild(li);
+            });
+        }
+
+        function resetFlow() {
+            currentStep = 'start';
+            history.length = 0;
+            updateHistory();
+            updateQuestion();
+        }
+
+        // Inicializar
+        updateQuestion();
+    </script>
+</body>
+</html>

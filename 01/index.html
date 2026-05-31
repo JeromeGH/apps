@@ -1,1 +1,236 @@
-hola -- 01
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calca-Digital Ultra: Control Total</title>
+	<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+    <style>
+        :root { --primary: #007bff; --accent: #ffc107; --bg: #121212; }
+        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+        
+        /* Área de Trabajo */
+        #viewport { flex-grow: 1; position: relative; overflow: hidden; background: #000; }
+        
+        #video-container { width: 100%; height: 100%; position: absolute; overflow: hidden; z-index: 1; }
+        video { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s ease; }
+
+        #drag-container { position: absolute; z-index: 2; display: none; touch-action: none; padding: 10px; }
+        #overlayImage { display: block; width: 100%; height: 100%; opacity: 0.5; }
+
+        /* Transformadores visuales */
+        .handle { position: absolute; width: 16px; height: 16px; background: white; border: 3px solid var(--primary); border-radius: 4px; z-index: 3; }
+        .top-left { top: -5px; left: -5px; cursor: nwse-resize; }
+        .top-right { top: -5px; right: -5px; cursor: nesw-resize; }
+        .bottom-left { bottom: -5px; left: -5px; cursor: nesw-resize; }
+        .bottom-right { bottom: -5px; right: -5px; cursor: nwse-resize; }
+        .rotate-handle { position: absolute; top: -35px; left: calc(50% - 10px); width: 20px; height: 20px; background: #28a745; border: 2px solid white; border-radius: 50%; cursor: grab; }
+
+        /* Panel de Controles */
+        .controls { background: #1e1e1e; padding: 10px; border-top: 1px solid #444; z-index: 10; display: flex; flex-direction: column; gap: 10px; }
+        .tab-buttons { display: flex; gap: 5px; justify-content: center; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        .tab-btn { background: none; border: none; color: #888; padding: 5px 15px; cursor: pointer; font-weight: bold; }
+        .tab-btn.active { color: var(--primary); border-bottom: 2px solid var(--primary); }
+
+        .control-row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-around; align-items: center; }
+        .group { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        label { font-size: 10px; color: #aaa; text-transform: uppercase; }
+        
+        button { background: #333; color: white; border: 1px solid #444; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+        button:hover { background: #444; border-color: var(--primary); }
+        .btn-reset { color: #ff6b6b; border-color: #ff6b6b; }
+        
+        input[type="range"] { width: 100px; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="viewport">
+        <div id="video-container">
+            <video id="webcam" autoplay playsinline></video>
+        </div>
+        
+        <div id="drag-container">
+            <div class="rotate-handle"></div>
+            <div class="handle top-left"></div>
+            <div class="handle top-right"></div>
+            <div class="handle bottom-left"></div>
+            <div class="handle bottom-right"></div>
+            <img id="overlayImage" src="">
+        </div>
+    </div>
+
+    <div class="controls">
+        <div class="tab-buttons">
+            <button class="tab-btn active" onclick="showTab('img-tools')">IMAGEN</button>
+            <button class="tab-btn" onclick="showTab('cam-tools')">CÁMARA</button>
+        </div>
+
+        <!-- Herramientas de Imagen -->
+        <div id="img-tools" class="control-row">
+            <div class="group">
+                <label>1. Cargar</label>
+                <input type="file" id="fileInput" accept="image/*" style="width: 140px; font-size: 10px;">
+            </div>
+            <div class="group">
+                <label>Opacidad</label>
+                <input type="range" id="opacitySlider" min="0" max="1" step="0.01" value="0.5">
+            </div>
+            <div class="group">
+                <label>Girar Imagen</label>
+                <div>
+                    <button onclick="rotateStep('img', -90)">-90°</button>
+                    <button onclick="rotateStep('img', 90)">+90°</button>
+                </div>
+            </div>
+            <div class="group">
+                <label>Ajustar</label>
+                <div style="display:flex; gap:2px;">
+                    <button onclick="fitTo('width')">Ancho</button>
+                    <button onclick="fitTo('height')">Alto</button>
+                </div>
+            </div>
+            <div class="group">
+                <label>Reset</label>
+                <button class="btn-reset" onclick="resetImg()">🔄</button>
+            </div>
+        </div>
+
+        <!-- Herramientas de Cámara -->
+        <div id="cam-tools" class="control-row hidden">
+            <div class="group">
+                <label>Zoom Cámara</label>
+                <input type="range" id="camZoomSlider" min="1" max="3" step="0.1" value="1">
+            </div>
+            <div class="group">
+                <label>Girar Cámara</label>
+                <div>
+                    <button onclick="rotateStep('cam', -90)">-90°</button>
+                    <button onclick="rotateStep('cam', 90)">+90°</button>
+                </div>
+            </div>
+            <div class="group">
+                <label>Espejo</label>
+                <button onclick="toggleMirror()">Invertir</button>
+            </div>
+            <div class="group">
+                <label>Reset</label>
+                <button class="btn-reset" onclick="resetCam()">🔄</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('webcam');
+        const container = document.getElementById('drag-container');
+        const img = document.getElementById('overlayImage');
+        
+        let imgState = { x: 0, y: 0, scale: 1, angle: 0 };
+        let camState = { zoom: 1, angle: 0, mirror: -1 };
+
+        // --- CÁMARA ---
+        async function initCam() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                video.srcObject = stream;
+            } catch (e) { alert("Acceso a cámara denegado."); }
+        }
+
+        function updateCam() {
+            video.style.transform = `scaleX(${camState.mirror}) scale(${camState.zoom}) rotate(${camState.angle}deg)`;
+        }
+
+        function resetCam() {
+            camState = { zoom: 1, angle: 0, mirror: -1 };
+            document.getElementById('camZoomSlider').value = 1;
+            updateCam();
+        }
+
+        // --- IMAGEN ---
+        document.getElementById('fileInput').onchange = e => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = event => {
+                img.src = event.target.result;
+                img.onload = () => {
+                    container.style.display = 'block';
+                    container.style.width = '300px';
+                    resetImg();
+                };
+            };
+            reader.readAsDataURL(file);
+        };
+
+        function updateImg() {
+            container.style.transform = `translate(${imgState.x}px, ${imgState.y}px) rotate(${imgState.angle}deg) scale(${imgState.scale})`;
+        }
+
+        function resetImg() {
+            const v = document.getElementById('viewport');
+            imgState = { 
+                x: (v.offsetWidth - 300) / 2, 
+                y: (v.offsetHeight - 200) / 2, 
+                scale: 1, 
+                angle: 0 
+            };
+            updateImg();
+        }
+
+        // --- FUNCIONES COMUNES ---
+        function rotateStep(type, deg) {
+            if (type === 'img') { imgState.angle += deg; updateImg(); }
+            else { camState.angle += deg; updateCam(); }
+        }
+
+        function toggleMirror() { camState.mirror *= -1; updateCam(); }
+
+        function fitTo(side) {
+            const v = document.getElementById('viewport');
+            if (side === 'width') imgState.scale = (v.offsetWidth * 0.9) / container.offsetWidth;
+            else imgState.scale = (v.offsetHeight * 0.8) / container.offsetHeight;
+            updateImg();
+        }
+
+        // --- INTERACTJS (Mover/Redimensionar/Rotar) ---
+        interact(container).draggable({
+            listeners: { move(e) { imgState.x += e.dx; imgState.y += e.dy; updateImg(); } },
+            ignoreFrom: '.handle, .rotate-handle'
+        }).resizable({
+            edges: { left: '.top-left, .bottom-left', right: '.top-right, .bottom-right', bottom: true, top: true },
+            listeners: { move(e) {
+                let growth = 1 + ((e.deltaRect.width || e.deltaRect.height) / container.offsetWidth);
+                imgState.scale *= growth;
+                imgState.x += e.deltaRect.left;
+                imgState.y += e.deltaRect.top;
+                updateImg();
+            }},
+            modifiers: [interact.modifiers.aspectRatio({ ratio: 'preserve' })]
+        });
+
+        interact('.rotate-handle').draggable({
+            onmove: (e) => {
+                const rect = container.getBoundingClientRect();
+                const angle = Math.atan2(e.pageY - (rect.top + rect.height/2), e.pageX - (rect.left + rect.width/2));
+                imgState.angle = angle * (180 / Math.PI) + 90;
+                updateImg();
+            }
+        });
+
+        // --- UI & EVENTOS ---
+        function showTab(id) {
+            document.querySelectorAll('.control-row').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(id).classList.remove('hidden');
+            event.target.classList.add('active');
+        }
+
+        document.getElementById('opacitySlider').oninput = e => img.style.opacity = e.target.value;
+        document.getElementById('camZoomSlider').oninput = e => { camState.zoom = e.target.value; updateCam(); };
+
+        initCam();
+    </script>
+</body>
+</html>

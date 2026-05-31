@@ -1,1 +1,1652 @@
-hola -- 03
+<!doctype html>
+<html lang="es" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Calificación de Contratistas MINVU - D.S. N° 127</title>
+	<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <!-- Tailwind CSS v4 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- React & ReactDOM CDN -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- Babel Standalone to transpile JS/JSX in the browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- jsPDF CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- Inter, Space Grotesk, JetBrains Mono fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+    <style>
+      body {
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      }
+      .font-display {
+        font-family: 'Space Grotesk', system-ui, sans-serif;
+      }
+      .font-mono {
+        font-family: 'JetBrains Mono', monospace;
+      }
+      /* Hide standard range track decorations to style ourselves */
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #ffffff;
+        cursor: pointer;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+        border: 2px solid #6366f1;
+        transition: transform 0.1s ease;
+      }
+      input[type="range"]::-webkit-slider-thumb:hover {
+        transform: scale(1.15);
+      }
+    </style>
+  </head>
+  <body class="bg-slate-950 text-slate-100 min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useMemo } = React;
+
+      // 1. DATA CONFIGURATION & CRITERIA (D.S. 127/77)
+      const rubrosConfig = [
+        {
+          id: 'A',
+          nombre: 'Dirección Técnica de la Ejecución de las Obras',
+          peso: 0.60,
+          subfactors: [
+            { id: 'A1', nombre: 'Calidad de Ejecución y Terminaciones', puntosMaximos: 35, descripcion: 'Inspección de terminaciones, ausencia de fallas constructivas, apego estricto a planos y estándares estéticos exigidos por el SERVIU.' },
+            { id: 'A2', nombre: 'Organización, Programación y Plazos', puntosMaximos: 25, descripcion: 'Cumplimiento del cronograma de obras (Gantt), ritmo de avance, capacidad de reacción ante imprevistos técnicos y finalización dentro del plazo.' },
+            { id: 'A3', nombre: 'Especificaciones y Órdenes de la ITO', puntosMaximos: 20, descripcion: 'Cumplimiento diligente de anotaciones en el Libro de Obras y directrices técnicas entregadas por el Inspector Técnico de Obras (ITO).' },
+            { id: 'A4', nombre: 'Idoneidad del Personal Técnico', puntosMaximos: 10, descripcion: 'Calificación, experiencia y permanencia en terreno del profesional residente y equipo de apoyo técnico asignado.' },
+            { id: 'A5', nombre: 'Equipos y Maquinaria en Obra', puntosMaximos: 10, descripcion: 'Disponibilidad, estado mecánico continuo, seguridad de los operadores y suficiencia de la maquinaria para las faenas contratadas.' }
+          ]
+        },
+        {
+          id: 'B',
+          nombre: 'Comportamiento Administrativo y Aspectos Legales / Laborales',
+          peso: 0.30,
+          subfactors: [
+            { id: 'B1', nombre: 'Comportamiento Administrativo y Relación con SERVIU', puntosMaximos: 35, descripcion: 'Entrega oportuna de documentación contractual, calidad y rigor en estados de pago, informes mecánicos, y relación colaborativa.' },
+            { id: 'B2', nombre: 'Obligaciones Laborales y Previsionales', puntosMaximos: 35, descripcion: 'Historial impecable de pagos de remuneraciones, imposiciones, cotizaciones mutuales y cumplimiento cabal con subcontratistas y proveedores.' },
+            { id: 'B3', nombre: 'Seguridad, Higiene y Prevención de Riesgos', puntosMaximos: 30, descripcion: 'Implementación del plan de prevención, uso de Equipos de Protección Personal (EPP), señalización víal y peatonal, y orden del campamento.' }
+          ]
+        },
+        {
+          id: 'C',
+          nombre: 'Compromiso Medioambiental y Comunitario',
+          peso: 0.10,
+          subfactors: [
+            { id: 'C1', nombre: 'Higiene Ambiental, Polución y Residuos', puntosMaximos: 50, descripcion: 'Control efectivo de emisión de polvo (riego constante), niveles de ruido, gestión y acopio ordenado de escombros y retiro autorizado.' },
+            { id: 'C2', nombre: 'Relación Comunitaria y Mitigación', puntosMaximos: 50, descripcion: 'Gestión correcta de desvíos vehiculares, habilitación de pasos peatonales seguros, avisos previos a vecinos y resolución expedita de molestias.' }
+          ]
+        }
+      ];
+
+      // 2. HELPER EXTREMELY COMPACT ICON HANDLER (Replaces all lucide component imports perfectly)
+      const Icon = ({ name, className = "" }) => {
+        const hasSize = className.includes("w-") || className.includes("h-");
+        const finalClassName = `${hasSize ? "" : "w-4 h-4"} ${className}`.trim();
+        const icons = {
+          FileText: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={finalClassName}><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>,
+          Sliders: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={finalClassName}><line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/></svg>,
+          Download: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={finalClassName}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>,
+          User: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={finalClassName}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+          Briefcase: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={finalClassName}><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><rect width="20" height="14" x="2" y="6" rx="2"/></svg>,
+          Plus: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={finalClassName}><path d="M5 12h14"/><path d="M12 5v14"/></svg>,
+          Trash2: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={finalClassName}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>,
+          CheckCircle2: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={finalClassName}><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>,
+          ChevronRight: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={finalClassName}><path d="m9 18 6-6-6-6"/></svg>,
+          ChevronDown: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={finalClassName}><path d="m6 9 6 6 6-6"/></svg>,
+          ChevronUp: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={finalClassName}><path d="m18 15-6-6-6 6"/></svg>,
+          Info: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={finalClassName}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>,
+          Share2: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={finalClassName}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>,
+          SlidersHorizontal: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={finalClassName}><line x1="4" x2="20" y1="4" y2="4"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="20" y2="20"/><polyline points="8 2 8 6"/><polyline points="16 10 16 14"/><polyline points="12 18 12 22"/></svg>,
+          Building: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={finalClassName}><rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M8 10h.01"/><path d="M16 10h.01"/><path d="M8 14h.01"/><path d="M16 14h.01"/></svg>,
+          Check: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={finalClassName}><path d="M20 6 9 17l-5-5"/></svg>,
+        };
+        return icons[name] || null;
+      };
+
+      // 3. COMPLETE PDF EXPORT FUNCTIONS (using jsPDF via CDN globally available at window.jspdf)
+      function formatNumber(num, decimals = 2) {
+        return num.toLocaleString('es-CL', {
+          minimumFractionDigits: decimals,
+          maximumFractionDigits: decimals
+        });
+      }
+
+      function addWrappedText(doc, text, x, y, maxWidth, lineHeight = 5) {
+        const lines = doc.splitTextToSize(text, maxWidth);
+        for (let i = 0; i < lines.length; i++) {
+          doc.text(lines[i], x, y + i * lineHeight);
+        }
+        return y + lines.length * lineHeight;
+      }
+
+      function generateOficioPDF(oficio, contractor, work, scoreTotal, gradeTotal) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const marginX = 20;
+
+        // Header drawing (blue / red blocks matching MINVU style)
+        doc.setFillColor(0, 80, 157);
+        doc.rect(marginX, 15, 18, 18, 'F');
+        doc.setFillColor(193, 18, 31);
+        doc.rect(marginX + 18, 15, 18, 18, 'F');
+
+        doc.setTextColor(30, 30, 30);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.text('Ministerio de', marginX, 36);
+        doc.text('Vivienda y', marginX, 39.5);
+        doc.text('Urbanismo', marginX, 43);
+
+        doc.setFontSize(6.5);
+        doc.setTextColor(120, 120, 120);
+        doc.setFont('Helvetica', 'normal');
+        doc.text('Gobierno de Chile', marginX, 46.5);
+
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.setTextColor(0, 80, 157);
+        doc.text('TRABAJANDO', marginX + 44, 23);
+        doc.setTextColor(193, 18, 31);
+        doc.text('PARA USTED', marginX + 44, 29);
+
+        doc.setDrawColor(193, 18, 31);
+        doc.setLineWidth(0.4);
+        doc.line(marginX + 44, 32, marginX + 85, 32);
+
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(0, 80, 157);
+        doc.text('OFICIO ELECTRÓNICO', marginX, 55);
+
+        // Right side Divider
+        doc.setDrawColor(200, 200, 200);
+        doc.setLineWidth(0.2);
+        doc.line(marginX + 92, 15, marginX + 92, 58);
+
+        // Metadata
+        doc.setFontSize(8.5);
+        doc.setTextColor(30, 30, 30);
+        const metaXLabel = marginX + 95;
+        const metaXVal = marginX + 118;
+        const wrapWidth = pageWidth - metaXVal - 15;
+
+        let currentY = 19;
+        doc.setFont('Helvetica', 'bold');
+        doc.text('ORD. Nº  :', metaXLabel, currentY);
+        doc.text(oficio.ordenNro, metaXVal, currentY);
+
+        currentY += 5;
+        doc.text('ANT.       :', metaXLabel, currentY);
+        doc.setFont('Helvetica', 'normal');
+        currentY = addWrappedText(doc, oficio.antecedentes, metaXVal, currentY, wrapWidth, 4.2) - 4.2;
+
+        currentY += 6;
+        doc.setFont('Helvetica', 'bold');
+        doc.text('MAT.      :', metaXLabel, currentY);
+        doc.setFont('Helvetica', 'normal');
+        const matText = `${oficio.materia} (${formatNumber(scoreTotal, 2)} Puntos, Nota ${formatNumber(gradeTotal, 1)})`;
+        currentY = addWrappedText(doc, matText, metaXVal, currentY, wrapWidth, 4.2) - 4.2;
+
+        currentY += 6;
+        doc.setFont('Helvetica', 'bold');
+        doc.text('ADJ.       :', metaXLabel, currentY);
+        doc.setFont('Helvetica', 'normal');
+        currentY = addWrappedText(doc, oficio.adjuntos, metaXVal, currentY, wrapWidth, 4.2);
+
+        let bodyY = Math.max(70, currentY + 8);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text(`${oficio.ciudad}, ${oficio.fechaEmision}`, marginX, bodyY);
+
+        bodyY += 10;
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(9.5);
+        doc.text('A        :', marginX, bodyY);
+        doc.text(contractor.nombreContratista.toUpperCase(), marginX + 18, bodyY);
+        bodyY += 4.5;
+        doc.text('CONTRATISTA', marginX + 18, bodyY);
+
+        bodyY += 7;
+        doc.text('DE      :', marginX, bodyY);
+        doc.text(oficio.remitenteNombre.toUpperCase(), marginX + 18, bodyY);
+        bodyY += 4.5;
+        const splitCargo = doc.splitTextToSize(oficio.remitenteCargo.toUpperCase(), pageWidth - marginX - 45);
+        for (let s = 0; s < splitCargo.length; s++) {
+          doc.text(splitCargo[s], marginX + 18, bodyY);
+          bodyY += 4.5;
+        }
+
+        bodyY += 4;
+        doc.setDrawColor(220, 220, 220);
+        doc.setLineWidth(0.15);
+        doc.line(marginX, bodyY, pageWidth - marginX, bodyY);
+
+        bodyY += 8;
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(10);
+        const textPara1 = "1.   Adjunto me permito remitir a Uds. Calificación obtenida por esa Empresa Constructora, en conformidad a lo establecido en el D.S. Nº 127/77 (V. y U.), en la obra que se individualiza:";
+        bodyY = addWrappedText(doc, textPara1, marginX, bodyY, pageWidth - marginX * 2, 5.5) + 3;
+
+        // Details Grid
+        const gridXLabel = marginX + 12;
+        const gridXVal = marginX + 54;
+        const gridValWidth = pageWidth - gridXVal - marginX;
+
+        const metadataPairs = [
+          { label: 'OBRA', val: work.nombreObra },
+          { label: 'PROYECTO', val: work.proyectoCodigo || 'N/A' },
+          { label: 'COMUNA', val: work.comuna },
+          { label: 'FECHA DE RECEPCIÓN', val: work.fechaRecepcionUnica },
+          { label: 'PUNTAJE OBTENIDO', val: `${formatNumber(scoreTotal, 2)} de un total de 100 puntos. (Nota Equivalente: ${formatNumber(gradeTotal, 1)})` }
+        ];
+
+        for (const pair of metadataPairs) {
+          doc.setFont('Helvetica', 'bold');
+          doc.text(`${pair.label}`, gridXLabel, bodyY);
+          doc.text(':', gridXVal - 4, bodyY);
+          doc.setFont('Helvetica', 'normal');
+          bodyY = addWrappedText(doc, pair.val, gridXVal, bodyY, gridValWidth, 4.8);
+          bodyY += 2;
+        }
+
+        bodyY += 3;
+        const textPara2 = "2.   Finalmente se informa que la Empresa podrá apelar a la calificación indicada precedentemente acogiéndose a los procedimientos establecidos en la Ley Nº 19880/2008.-";
+        bodyY = addWrappedText(doc, textPara2, marginX, bodyY, pageWidth - marginX * 2, 5.5);
+
+        bodyY += 15;
+        doc.setFont('Helvetica', 'normal');
+        doc.text('Saluda atentamente a Ud.', marginX, bodyY);
+
+        bodyY += 25;
+        if (bodyY > pageHeight - 55) {
+          doc.addPage();
+          bodyY = 30;
+        }
+
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(9.5);
+        const sigName = oficio.remitenteNombre.toUpperCase();
+        const sigCharge = oficio.remitenteCargo.toUpperCase();
+        
+        const nameWidth = doc.getTextWidth(sigName);
+        doc.text(sigName, (pageWidth - nameWidth) / 2, bodyY);
+        
+        bodyY += 4.5;
+        const splitSigCharge = doc.splitTextToSize(sigCharge, pageWidth - 40);
+        for (let s = 0; s < splitSigCharge.length; s++) {
+          const chargeWidth = doc.getTextWidth(splitSigCharge[s]);
+          doc.text(splitSigCharge[s], (pageWidth - chargeWidth) / 2, bodyY);
+          bodyY += 4.5;
+        }
+
+        bodyY += 15;
+        if (bodyY > pageHeight - 45) {
+          doc.addPage();
+          bodyY = 30;
+        }
+
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.text(oficio.inicialesSello, marginX, bodyY);
+        
+        bodyY += 4;
+        doc.setFont('Helvetica', 'bold');
+        doc.text('Distribución:', marginX, bodyY);
+        
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(7);
+        bodyY += 3.5;
+
+        for (let i = 0; i < oficio.distribuciones.length; i++) {
+          const textDist = `- ${i + 1}.- ${oficio.distribuciones[i].toUpperCase()}`;
+          bodyY = addWrappedText(doc, textDist, marginX, bodyY, pageWidth - marginX * 2, 3.5);
+        }
+
+        return doc;
+      }
+
+      function generateFormatoCalificacionPDF(contractor, work, scores, scoreTotal, gradeTotal) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const marginX = 15;
+
+        // Cover Box header
+        doc.setFillColor(0, 80, 157);
+        doc.rect(marginX, 12, pageWidth - marginX * 2, 10, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.text('INFORME DE CALIFICACIÓN DE CONTRATISTA - FORMATO 1a', pageWidth / 2, 18, { align: 'center' });
+
+        doc.setTextColor(30, 30, 30);
+        doc.setFontSize(7.5);
+        let gridY = 27;
+
+        // General Metadata
+        doc.text('1. ANTECEDENTES GENERALES DEL CONTRATISTA Y LA OBRA', marginX, gridY);
+        doc.line(marginX, gridY + 1.5, pageWidth - marginX, gridY + 1.5);
+        
+        gridY += 5;
+        doc.setFont('Helvetica', 'bold');
+        doc.text('Nombre Contratista:', marginX, gridY);
+        doc.setFont('Helvetica', 'normal');
+        doc.text(contractor.nombreContratista, marginX + 32, gridY);
+
+        doc.setFont('Helvetica', 'bold');
+        doc.text('R.U.T. Contratista:', marginX + 112, gridY);
+        doc.setFont('Helvetica', 'normal');
+        doc.text(contractor.rut, marginX + 142, gridY);
+
+        gridY += 4.5;
+        doc.setFont('Helvetica', 'bold');
+        doc.text('Registro / Categoría:', marginX, gridY);
+        doc.setFont('Helvetica', 'normal');
+        doc.text(`${contractor.registro} - ${contractor.categoria} Cat. (Insc: ${contractor.numeroInscripcion})`, marginX + 32, gridY);
+
+        doc.setFont('Helvetica', 'bold');
+        doc.text('Serviu Regional:', marginX + 112, gridY);
+        doc.setFont('Helvetica', 'normal');
+        doc.text(`${work.serviu} - Región ${work.region}`, marginX + 142, gridY);
+
+        gridY += 4.5;
+        doc.setFont('Helvetica', 'bold');
+        doc.text('Nombre de la Obra:', marginX, gridY);
+        doc.setFont('Helvetica', 'normal');
+        const splitObra = doc.splitTextToSize(work.nombreObra, pageWidth - marginX * 2 - 35);
+        doc.text(splitObra, marginX + 32, gridY);
+        gridY += (splitObra.length - 1) * 3.5;
+
+        gridY += 4.5;
+        doc.setFont('Helvetica', 'bold');
+        doc.text('Comuna / Provincia:', marginX, gridY);
+        doc.setFont('Helvetica', 'normal');
+        doc.text(`${work.comuna} / ${work.provincia}`, marginX + 32, gridY);
+
+        doc.setFont('Helvetica', 'bold');
+        doc.text('Código Proyecto:', marginX + 112, gridY);
+        doc.setFont('Helvetica', 'normal');
+        doc.text(work.proyectoCodigo || 'Sin Código', marginX + 142, gridY);
+
+        gridY += 4.5;
+        doc.setFont('Helvetica', 'bold');
+        doc.text('F. Recepción Única:', marginX, gridY);
+        doc.setFont('Helvetica', 'normal');
+        doc.text(work.fechaRecepcionUnica, marginX + 32, gridY);
+
+        doc.setFont('Helvetica', 'bold');
+        doc.text('Res. Adjudicación:', marginX + 112, gridY);
+        doc.setFont('Helvetica', 'normal');
+        doc.text(work.resolucionAdjudicacion, marginX + 142, gridY);
+
+        gridY += 4.5;
+        doc.setFont('Helvetica', 'bold');
+        doc.text('Monto Vigente Contrato:', marginX, gridY);
+        doc.setFont('Helvetica', 'normal');
+        doc.text(`$ ${formatNumber(work.montoContratoVigente, 0)} CLP`, marginX + 32, gridY);
+
+        doc.setFont('Helvetica', 'bold');
+        doc.text('Plazo y Ampliaciones:', marginX + 112, gridY);
+        doc.setFont('Helvetica', 'normal');
+        doc.text(`${work.plazoDiasOriginal} días (+ ${work.plazoAmpliaciones} d. ampliación)`, marginX + 142, gridY);
+
+        gridY += 8;
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.text('2. PAUTA DE CALIFICACIÓN DE FACTORES (DECRETO 127/77)', marginX, gridY);
+        doc.line(marginX, gridY + 1.5, pageWidth - marginX, gridY + 1.5);
+
+        gridY += 5;
+        const colXRubro = marginX;
+        const colXDesc = marginX + 50;
+        const colXMax = marginX + 145;
+        const colXAsig = marginX + 168;
+        const colWidth = pageWidth - marginX * 2;
+
+        doc.setFillColor(240, 240, 245);
+        doc.rect(marginX, gridY, colWidth, 6, 'F');
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.text('RUBRO / CRITERIO DE EVALUACIÓN', colXRubro + 2, gridY + 4);
+        doc.text('DESCRIPCIÓN DEL ESTÁNDAR', colXDesc + 2, gridY + 4);
+        doc.text('MÁX PUNTOS', colXMax + 1, gridY + 4);
+        doc.text('PUNTOS ASIGNADOS', colXAsig + 1, gridY + 4);
+
+        gridY += 6;
+        let rubroSubtotals = { A: 0, B: 0, C: 0 };
+
+        for (const rubro of rubrosConfig) {
+          doc.setFillColor(248, 248, 250);
+          doc.rect(marginX, gridY, colWidth, 5.5, 'F');
+          doc.setFont('Helvetica', 'bold');
+          doc.setFontSize(7.5);
+          doc.text(`RUBRO ${rubro.id}: ${rubro.nombre.toUpperCase()} (PESO: ${rubro.peso * 100}%)`, colXRubro + 2, gridY + 4);
+          
+          gridY += 5.5;
+          let subfactorSum = 0;
+
+          for (const sub of rubro.subfactors) {
+            const assignedScore = scores[sub.id] || 0;
+            subfactorSum += assignedScore;
+
+            doc.setDrawColor(230, 230, 235);
+            doc.setLineWidth(0.12);
+            doc.line(marginX, gridY, pageWidth - marginX, gridY);
+
+            doc.setFont('Helvetica', 'bold');
+            doc.setFontSize(7);
+            const wrapTitle = doc.splitTextToSize(`${sub.id}. ${sub.nombre}`, 45);
+            doc.text(wrapTitle, colXRubro + 2, gridY + 3.2);
+
+            doc.setFont('Helvetica', 'normal');
+            const wrapDesc = doc.splitTextToSize(sub.descripcion, 90);
+            doc.text(wrapDesc, colXDesc + 2, gridY + 3.2);
+
+            doc.text(`${sub.puntosMaximos}`, colXMax + 8, gridY + 3.2, { align: 'right' });
+
+            doc.setFont('Helvetica', 'bold');
+            doc.setTextColor(0, 80, 157);
+            doc.text(`${assignedScore.toFixed(0)}`, colXAsig + 12, gridY + 3.2, { align: 'right' });
+            doc.setTextColor(30, 30, 30);
+
+            const rowLen = Math.max(wrapTitle.length, wrapDesc.length);
+            gridY += Math.max(8, rowLen * 3.5);
+          }
+
+          rubroSubtotals[rubro.id] = subfactorSum;
+
+          doc.setFillColor(242, 245, 249);
+          doc.rect(marginX, gridY, colWidth, 5, 'F');
+          doc.setFont('Helvetica', 'bold');
+          doc.setFontSize(7);
+          doc.text(`Subtotal Rubro ${rubro.id} (Promedio base 0-100):`, colXRubro + 2, gridY + 3.5);
+          
+          const subMax = rubro.subfactors.reduce((a, b) => a + b.puntosMaximos, 0);
+          const subPercentage = (subfactorSum / subMax) * 100;
+          doc.text(`${subfactorSum.toFixed(0)} / ${subMax}`, colXMax + 8, gridY + 3.5, { align: 'right' });
+          
+          doc.setTextColor(0, 80, 157);
+          doc.text(`${subPercentage.toFixed(1)}% (Pond: ${(subPercentage * rubro.peso).toFixed(2)} pts)`, colXAsig + 15, gridY + 3.5, { align: 'right' });
+          doc.setTextColor(30, 30, 30);
+
+          gridY += 6;
+        }
+
+        doc.setDrawColor(0, 80, 157);
+        doc.setLineWidth(0.4);
+        doc.line(marginX, gridY, pageWidth - marginX, gridY);
+
+        gridY += 3;
+        doc.setFillColor(240, 246, 255);
+        doc.setDrawColor(180, 205, 240);
+        doc.setLineWidth(0.3);
+        doc.rect(marginX, gridY, colWidth, 18, 'FD');
+
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(0, 80, 157);
+        doc.text('3. RESULTADOS DE CALIFICACIÓN FINAL', marginX + 4, gridY + 6);
+
+        doc.setFontSize(8);
+        doc.setTextColor(50, 50, 50);
+        doc.text(`Pond A: ${( (rubroSubtotals['A']/100)*100 * 0.6).toFixed(2)}% | Pond B: ${( (rubroSubtotals['B']/100)*100 * 0.3).toFixed(2)}% | Pond C: ${( (rubroSubtotals['C']/100)*100 * 0.1).toFixed(2)}%`, marginX + 4, gridY + 11);
+
+        doc.setFontSize(14);
+        doc.setTextColor(193, 18, 31);
+        doc.text(`NOTA FINAL: ${formatNumber(gradeTotal, 1)}`, pageWidth - marginX - 6, gridY + 8, { align: 'right' });
+        doc.setFontSize(8.5);
+        doc.setTextColor(0, 80, 157);
+        doc.text(`Puntaje Total: ${formatNumber(scoreTotal, 2)} / 100`, pageWidth - marginX - 6, gridY + 13, { align: 'right' });
+
+        gridY += 23;
+        if (gridY > pageHeight - 45) {
+          doc.addPage();
+          gridY = 30;
+        }
+
+        doc.setTextColor(100, 100, 100);
+        doc.setFontSize(7.5);
+        doc.setFont('Helvetica', 'bold');
+        doc.text('4. COMISIÓN CALIFICADORA DE OBRAS (ARTÍCULO 36 D.S. 127/77)', marginX, gridY);
+        doc.line(marginX, gridY + 1.2, pageWidth - marginX, gridY + 1.2);
+
+        gridY += 15;
+        const colWidthSig = (pageWidth - marginX * 2) / 3;
+
+        doc.setDrawColor(120, 120, 120);
+        doc.setLineWidth(0.2);
+        doc.line(marginX + 5, gridY, marginX + colWidthSig - 5, gridY);
+        doc.line(marginX + colWidthSig + 5, gridY, marginX + colWidthSig * 2 - 5, gridY);
+        doc.line(marginX + colWidthSig * 2 + 5, gridY, pageWidth - marginX - 5, gridY);
+
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(30, 30, 30);
+        doc.text('INSPECTOR TÉCNICO DE OBRA (ITO)', marginX + colWidthSig / 2, gridY + 4, { align: 'center' });
+        doc.text('FIRMA Y TIMBRE', marginX + colWidthSig / 2, gridY + 7, { align: 'center' });
+
+        doc.text('PRESIDENTE COMISIÓN', marginX + colWidthSig * 1.5, gridY + 4, { align: 'center' });
+        doc.text('FIRMA / FECHA', marginX + colWidthSig * 1.5, gridY + 7, { align: 'center' });
+
+        doc.text('INTEGRANTE DE COMISIÓN', marginX + colWidthSig * 2.5, gridY + 4, { align: 'center' });
+        doc.text('FIRMA / FECHA', marginX + colWidthSig * 2.5, gridY + 7, { align: 'center' });
+
+        return doc;
+      }
+
+      // 4. MAIN REACT APP COMPONENT
+      function App() {
+        const [contractor, setContractor] = useState({
+          nombreContratista: 'Gabriel Ignacio Fernández de la Maza',
+          rut: '14.567.892-K',
+          registro: 'Registro Nacional de Contratistas MINVU',
+          categoria: 'Primera Categoría',
+          numeroInscripcion: '34511/2024'
+        });
+
+        const [work, setWork] = useState({
+          nombreObra: 'Proyecto de Pavimentación Acceso Vehicular Reposición 5° Comisaría de Yumbel, Comuna de Yumbel',
+          comuna: 'Yumbel',
+          provincia: 'Biobío',
+          region: 'Biobío',
+          serviu: 'SERVIU Región del Biobío',
+          proyectoCodigo: 'YM-1',
+          resolucionAdjudicacion: 'Resolución de Adjudicación Exenta Nº 451 de fecha 15/11/2025',
+          montoContratoOriginal: 120500000,
+          montoContratoVigente: 125400000,
+          plazoDiasOriginal: 180,
+          plazoAmpliaciones: 30,
+          fechaInicio: '2025-11-20',
+          fechaTerminoTeorico: '2026-05-19',
+          fechaRecepcionUnica: '11 de mayo de 2026'
+        });
+
+        const [oficio, setOficio] = useState({
+          ordenNro: '3411',
+          antecedentes: 'Obra Proyecto de Pavimentación Acceso Vehicular Reposición 5° Comisaría de Yumbel, Comuna de Yumbel.',
+          materia: 'Calificación Contratista según D.S. N127/77 (V. y U.), Proyecto YM-1 Comuna de Yumbel.',
+          adjuntos: 'Calificación Pavimento Particular.',
+          ciudad: 'Los Ángeles',
+          fechaEmision: '18 de mayo de 2026',
+          remitenteNombre: 'María Gabriela Medina Poblete',
+          remitenteCargo: 'Jefa Departamento Provincial de Biobío SERVIU Región del Biobío',
+          inicialesSello: 'CMM/MMR/EAP',
+          distribuciones: [
+            'DESTINATARIO CADJ AVDA. PEDRO DE VALDIVIA N880 DEPTO. 201 CONCEPCIÓN',
+            'SEREMI MINVU REGIÓN DEL BIOBÍO CADJ.',
+            'DEPARTAMENTO TÉCNICO SERVIU REGIÓN DEL BIOBÍO C.I.',
+            'EQUIPO DE ESTUDIOS DE PROCESOS DE CONTROL SERVIU REGIÓN DEL BIOBÍO SRTA. TANIA VILLAVICENCIO G.',
+            'OFICINA DE CONTROL DE GESTIÓN Y SUPERVISIÓN SERVIU BIOBÍO CADJ.',
+            'UNIDAD TÉCNICA SERVIU BIOBÍO C.I.',
+            'EQUIPO PROYECTOS URBANOS SERVIU BIOBÍO C.ADJ.'
+          ]
+        });
+
+        // Default perfect scores mapping to 100 points
+        const [scores, setScores] = useState({
+          A1: 35, A2: 25, A3: 20, A4: 10, A5: 10,
+          B1: 35, B2: 35, B3: 30,
+          C1: 50, C2: 50
+        });
+
+        const [activeTab, setActiveTab] = useState('calificar');
+        const [activeRubroTab, setActiveRubroTab] = useState('A');
+        const [openAccordions, setOpenAccordions] = useState({
+          contratista: true,
+          obra: false,
+          oficio: false,
+          distribucion: false
+        });
+
+        const [newDistributionItem, setNewDistributionItem] = useState('');
+
+        const toggleAccordion = (key) => {
+          setOpenAccordions(prev => ({ ...prev, [key]: !prev[key] }));
+        };
+
+        // Real-time calculation engine
+        const ratingDetails = useMemo(() => {
+          const scoreA = (scores.A1 || 0) + (scores.A2 || 0) + (scores.A3 || 0) + (scores.A4 || 0) + (scores.A5 || 0);
+          const rubroAPerc = (scoreA / 100) * 100;
+          const weightedA = rubroAPerc * 0.60;
+
+          const scoreB = (scores.B1 || 0) + (scores.B2 || 0) + (scores.B3 || 0);
+          const rubroBPerc = (scoreB / 100) * 100;
+          const weightedB = rubroBPerc * 0.30;
+
+          const scoreC = (scores.C1 || 0) + (scores.C2 || 0);
+          const rubroCPerc = (scoreC / 100) * 100;
+          const weightedC = rubroCPerc * 0.10;
+
+          const totalScoreOutof100 = weightedA + weightedB + weightedC;
+          const finalGrade = 1.0 + (totalScoreOutof100 / 100) * 6.0;
+
+          return { scoreA, weightedA, scoreB, weightedB, scoreC, weightedC, totalScoreOutof100, finalGrade };
+        }, [scores]);
+
+        const handleScoreChange = (subfactorId, value) => {
+          setScores(prev => ({ ...prev, [subfactorId]: value }));
+        };
+
+        const applyPresetScore = (subfactorId, percentage, maxPoints) => {
+          const calculated = Math.round((percentage / 100) * maxPoints);
+          handleScoreChange(subfactorId, calculated);
+        };
+
+        const addDistribution = () => {
+          if (newDistributionItem.trim()) {
+            setOficio(prev => ({
+              ...prev,
+              distribuciones: [...prev.distribuciones, newDistributionItem.trim()]
+            }));
+            setNewDistributionItem('');
+          }
+        };
+
+        const removeDistribution = (index) => {
+          setOficio(prev => ({
+            ...prev,
+            distribuciones: prev.distribuciones.filter((_, idx) => idx !== index)
+          }));
+        };
+
+        const resetOrMaxScores = (type) => {
+          const factorMax = { A1: 35, A2: 25, A3: 20, A4: 10, A5: 10, B1: 35, B2: 35, B3: 30, C1: 50, C2: 50 };
+          const multiplier = type === 'max' ? 1 : type === 'med' ? 0.7 : 0.3;
+          const computed = {};
+          Object.entries(factorMax).forEach(([k, max]) => {
+            computed[k] = Math.round(max * multiplier);
+          });
+          setScores(computed);
+        };
+
+        const downloadOficio = () => {
+          const doc = generateOficioPDF(oficio, contractor, work, ratingDetails.totalScoreOutof100, ratingDetails.finalGrade);
+          doc.save(`Oficio_Ord_${oficio.ordenNro}_Calificacion_Notificacion.pdf`);
+        };
+
+        const downloadFormato1a = () => {
+          const doc = generateFormatoCalificacionPDF(contractor, work, scores, ratingDetails.totalScoreOutof100, ratingDetails.finalGrade);
+          doc.save(`Formato_Ficha_Tecnica_1A_${contractor.nombreContratista.replace(/\s+/g, '_')}.pdf`);
+        };
+
+        const downloadBoth = () => {
+          downloadOficio();
+          setTimeout(() => downloadFormato1a(), 450);
+        };
+
+        const qualificationClassification = useMemo(() => {
+          const grade = ratingDetails.finalGrade;
+          if (grade >= 6.0) return { title: 'EXCELENTE / SOBRESALIENTE', desc: 'El contratista ha demostrado excelencia técnica excepcional, cumpliendo rigurosamente los estándares de calidad y tiempos.' };
+          if (grade >= 5.0) return { title: 'MUY BUENA / DESTACADA', desc: 'El desempeño es altamente satisfactorio, con sólida dirección en obra y cumplimiento impecable del contrato.' };
+          if (grade >= 4.0) return { title: 'ACEPTABLE / REGULAR', desc: 'Cumple de forma satisfactoria con las condiciones mínimas del contrato, con aspectos de mejora en control administrativo.' };
+          return { title: 'DEFICIENTE / INSUFICIENTE', desc: 'El contratista reporta atrasos críticos o fallas técnicas significativas que comprometen la calidad oficial.' };
+        }, [ratingDetails.finalGrade]);
+
+        return (
+          <div className="min-h-screen bg-slate-950 text-slate-100 font-sans pb-24 flex flex-col selection:bg-indigo-600/30">
+            {/* Top government color accent */}
+            <div className="h-1.5 w-full flex sticky top-0 z-50 shadow-md">
+              <div class="h-full w-1/3 bg-indigo-600"></div>
+              <div class="h-full w-1/3 bg-slate-100"></div>
+              <div class="h-full w-1/3 bg-red-600"></div>
+            </div>
+
+            {/* Header section with branding */}
+            <header className="border-b border-slate-900 bg-slate-950/80 backdrop-blur-md px-6 py-5">
+              <div className="max-w-5xl mx-auto flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <span className="bg-red-600 w-1.5 h-6 inline-block rounded-xs"></span>
+                    <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white font-display uppercase">
+                      CALIFICACIÓN DE CONTRATISTA
+                    </h1>
+                  </div>
+                  <p className="text-slate-400 text-[10px] mt-1 uppercase tracking-widest font-semibold font-mono">
+                    Decreto N° 127 Art. 34 • Registro Nacional de Contratistas MINVU
+                  </p>
+                </div>
+                <div className="text-left md:text-right font-mono border-t md:border-t-0 border-slate-800/60 pt-3 md:pt-0">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-widest">EXP: 2026-CH-{oficio.ordenNro || '3411'}</p>
+                  <p className="text-xs font-bold text-indigo-400 truncate max-w-[320px] uppercase mt-0.5">
+                    {contractor.nombreContratista}
+                  </p>
+                </div>
+              </div>
+            </header>
+
+            {/* Tab selection */}
+            <main className="flex-grow max-w-5xl w-full mx-auto px-4 sm:px-6 py-6">
+              
+              <div className="grid grid-cols-3 bg-slate-900/60 border border-slate-900/80 p-1 rounded-2xl mb-8 text-xs font-semibold text-slate-400 max-w-2xl mx-auto shadow-xl">
+                <button 
+                  onClick={() => setActiveTab('ficha')}
+                  className={`py-3 rounded-xl flex items-center justify-center gap-2 transition-all duration-200 ${
+                    activeTab === 'ficha' 
+                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/10 font-bold' 
+                      : 'hover:text-slate-200 hover:bg-slate-800/40'
+                  }`}
+                >
+                  <Icon name="FileText" />
+                  <span className="hidden sm:inline">1. Ficha Técnica</span>
+                  <span className="sm:hidden">1. Ficha</span>
+                </button>
+                
+                <button 
+                  onClick={() => setActiveTab('calificar')}
+                  className={`py-3 rounded-xl flex items-center justify-center gap-2 transition-all duration-200 ${
+                    activeTab === 'calificar' 
+                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/10 font-bold' 
+                      : 'hover:text-slate-200 hover:bg-slate-800/40'
+                  }`}
+                >
+                  <Icon name="Sliders" />
+                  <span className="hidden sm:inline">2. Calificación</span>
+                  <span className="sm:hidden">2. Evaluar</span>
+                </button>
+                
+                <button 
+                  onClick={() => setActiveTab('resultados')}
+                  className={`py-3 rounded-xl flex items-center justify-center gap-2 transition-all duration-200 ${
+                    activeTab === 'resultados' 
+                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/10 font-bold' 
+                      : 'hover:text-slate-200 hover:bg-slate-800/40'
+                  }`}
+                >
+                  <Icon name="Download" />
+                  <span className="hidden sm:inline">3. Exportar PDFs</span>
+                  <span className="sm:hidden">3. Exportar</span>
+                </button>
+              </div>
+
+              {/* TAB 1: FICHA TÉCNICA */}
+              {activeTab === 'ficha' && (
+                <div class="space-y-6">
+                  <div className="bg-slate-900/45 border border-slate-800 p-4 rounded-2xl text-xs leading-relaxed text-slate-300 flex items-start space-x-3 shadow-inner">
+                    <Icon name="Info" className="w-5 h-5 flex-shrink-0 text-indigo-400 mt-0.5" />
+                    <div>
+                      <strong className="text-white">Identificación Oficial (D.S. N° 127):</strong> 
+                      <p>Complete los datos correspondientes al contratista evaluado, los montos vigentes y la provincia del proyecto. El sistema compilará estos valores automáticamente para sincronizar y generar el archivo PDF del Oficio formal de envío y la Ficha Técnica oficial.</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* ACCORDION RECIPIENTS */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg hover:border-slate-700 transition-all duration-305">
+                      <button 
+                        onClick={() => toggleAccordion('contratista')}
+                        className="w-full flex items-center justify-between text-left pb-4 border-b border-slate-800 font-bold"
+                      >
+                        <div className="flex items-center space-x-2 text-white text-sm">
+                          <Icon name="User" className="w-4 h-4 text-indigo-400" />
+                          <span>CONTRATISTA EVALUADO</span>
+                        </div>
+                        <Icon name={openAccordions.contratista ? "ChevronUp" : "ChevronDown"} className="text-slate-500" />
+                      </button>
+
+                      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${openAccordions.contratista ? 'max-h-[500px] opacity-100 pt-4' : 'max-h-0 opacity-0'}`}>
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-1">Razón Social o Nombre Completo</label>
+                            <input 
+                              type="text" 
+                              value={contractor.nombreContratista}
+                              onChange={(e) => setContractor({ ...contractor, nombreContratista: e.target.value })}
+                              className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-indigo-500"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-1">R.U.T. Empresa</label>
+                              <input 
+                                type="text" 
+                                value={contractor.rut}
+                                onChange={(e) => setContractor({ ...contractor, rut: e.target.value })}
+                                className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-indigo-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-1">Nº Inscripción</label>
+                              <input 
+                                type="text" 
+                                value={contractor.numeroInscripcion}
+                                onChange={(e) => setContractor({ ...contractor, numeroInscripcion: e.target.value })}
+                                className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-indigo-500"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-1">Registro Nacional</label>
+                              <input 
+                                type="text" 
+                                value={contractor.registro}
+                                onChange={(e) => setContractor({ ...contractor, registro: e.target.value })}
+                                className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-indigo-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-1">Categoría</label>
+                              <input 
+                                type="text" 
+                                value={contractor.categoria}
+                                onChange={(e) => setContractor({ ...contractor, category: e.target.value })}
+                                className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-indigo-500"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {!openAccordions.contratista && (
+                        <div className="pt-4 space-y-2">
+                          <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 font-mono text-[11px] text-slate-300">
+                            <div><span className="text-slate-500">RUT:</span> {contractor.rut}</div>
+                            <div><span className="text-slate-500">INSCRIPCIÓN:</span> {contractor.numeroInscripcion}</div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* DETALLES DE OBRA CARD */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg hover:border-slate-700 transition-all duration-305">
+                      <button 
+                        onClick={() => toggleAccordion('obra')}
+                        className="w-full flex items-center justify-between text-left pb-4 border-b border-slate-800 font-bold"
+                      >
+                        <div className="flex items-center space-x-2 text-white text-sm">
+                          <Icon name="Briefcase" className="w-4 h-4 text-emerald-400" />
+                          <span>DETALLES DEL CONTRATO / OBRA</span>
+                        </div>
+                        <Icon name={openAccordions.obra ? "ChevronUp" : "ChevronDown"} className="text-slate-500" />
+                      </button>
+
+                      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${openAccordions.obra ? 'max-h-[700px] opacity-100 pt-4' : 'max-h-0 opacity-0'}`}>
+                        <div className="space-y-3.5">
+                          <div>
+                            <label className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-1">Nombre Oficial de la Obra</label>
+                            <textarea 
+                              value={work.nombreObra}
+                              onChange={(e) => setWork({ ...work, nombreObra: e.target.value })}
+                              rows="2"
+                              className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-indigo-500"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-1">Comuna</label>
+                              <input 
+                                type="text" 
+                                value={work.comuna}
+                                onChange={(e) => setWork({ ...work, comuna: e.target.value })}
+                                className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-indigo-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-1">Provincia</label>
+                              <input 
+                                type="text" 
+                                value={work.provincia}
+                                onChange={(e) => setWork({ ...work, provincia: e.target.value })}
+                                className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-indigo-500"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-1">Código de Contrato</label>
+                              <input 
+                                type="text" 
+                                value={work.proyectoCodigo}
+                                onChange={(e) => setWork({ ...work, proyectoCodigo: e.target.value })}
+                                className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-indigo-500 font-mono"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-1">Recepción Única (Fecha)</label>
+                              <input 
+                                type="text" 
+                                value={work.fechaRecepcionUnica}
+                                onChange={(e) => setWork({ ...work, fechaRecepcionUnica: e.target.value })}
+                                className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:outline-none"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-1">Monto Vigente ($)</label>
+                              <input 
+                                type="number" 
+                                value={work.montoContratoVigente}
+                                onChange={(e) => setWork({ ...work, montoContratoVigente: Number(e.target.value) })}
+                                className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:outline-none font-mono"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-1">Plazo Contractual (Días)</label>
+                              <input 
+                                type="number" 
+                                value={work.plazoDiasOriginal}
+                                onChange={(e) => setWork({ ...work, plazoDiasOriginal: Number(e.target.value) })}
+                                className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:outline-none font-mono"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-1">Servicio SERVIU Regional</label>
+                            <input 
+                              type="text" 
+                              value={work.serviu}
+                              onChange={(e) => setWork({ ...work, serviu: e.target.value })}
+                              className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-1">Resolución Adjudicación</label>
+                            <input 
+                              type="text" 
+                              value={work.resolucionAdjudicacion}
+                              onChange={(e) => setWork({ ...work, resolucionAdjudicacion: e.target.value })}
+                              className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {!openAccordions.obra && (
+                        <div className="pt-4">
+                          <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 font-mono text-[11px] text-slate-350 space-y-1">
+                            <div className="truncate"><span className="text-slate-500">OBRA:</span> {work.nombreObra}</div>
+                            <div><span className="text-slate-500">COMUNA:</span> {work.comuna}</div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ACCORDION NOTIFICATION OFICIO */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg hover:border-slate-700 transition-all duration-305">
+                      <button 
+                        onClick={() => toggleAccordion('oficio')}
+                        className="w-full flex items-center justify-between text-left pb-4 border-b border-slate-800 font-bold"
+                      >
+                        <div className="flex items-center space-x-2 text-white text-sm">
+                          <Icon name="FileText" className="w-4 h-4 text-indigo-400" />
+                          <span>OFICIO DE NOTIFICACIÓN</span>
+                        </div>
+                        <Icon name={openAccordions.oficio ? "ChevronUp" : "ChevronDown"} className="text-slate-500" />
+                      </button>
+
+                      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${openAccordions.oficio ? 'max-h-[500px] opacity-100 pt-4' : 'max-h-0 opacity-0'}`}>
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-1 font-mono">Nº Ordinario (Memo)</label>
+                              <input 
+                                type="text" 
+                                value={oficio.ordenNro}
+                                onChange={(e) => setOficio({ ...oficio, ordenNro: e.target.value })}
+                                className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white font-mono"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-1">Ciudad</label>
+                              <input 
+                                type="text" 
+                                value={oficio.ciudad}
+                                onChange={(e) => setOficio({ ...oficio, ciudad: e.target.value })}
+                                className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-1">Fecha Emisión</label>
+                              <input 
+                                type="text" 
+                                value={oficio.fechaEmision}
+                                onChange={(e) => setOficio({ ...oficio, fechaEmision: e.target.value })}
+                                className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-1 font-mono">Iniciales de Control</label>
+                              <input 
+                                type="text" 
+                                value={oficio.inicialesSello}
+                                onChange={(e) => setOficio({ ...oficio, inicialesSello: e.target.value })}
+                                className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white text-center font-mono"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-1">Remitente (Firma Principal)</label>
+                            <input 
+                              type="text" 
+                              value={oficio.remitenteNombre}
+                              onChange={(e) => setOficio({ ...oficio, remitenteNombre: e.target.value })}
+                              className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-1">Cargo Oficial</label>
+                            <textarea 
+                              value={oficio.remitenteCargo}
+                              onChange={(e) => setOficio({ ...oficio, remitenteCargo: e.target.value })}
+                              rows="2"
+                              className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {!openAccordions.oficio && (
+                        <div className="pt-4">
+                          <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 font-mono text-[11px] text-slate-350 space-y-1">
+                            <div><span className="text-slate-500">ORD:</span> Nº {oficio.ordenNro}</div>
+                            <div className="truncate"><span className="text-slate-500">REMITENTE:</span> {oficio.remitenteNombre}</div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ACCORDION DISTRIBUCIÓN */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg hover:border-slate-700 transition-all duration-305">
+                      <button 
+                        onClick={() => toggleAccordion('distribucion')}
+                        className="w-full flex items-center justify-between text-left pb-4 border-b border-slate-800 font-bold"
+                      >
+                        <div className="flex items-center space-x-2 text-white text-sm">
+                          <Icon name="Share2" className="w-4 h-4 text-amber-500" />
+                          <span>LISTA DE DISTRIBUCIONES ({oficio.distribuciones.length})</span>
+                        </div>
+                        <Icon name={openAccordions.distribucion ? "ChevronUp" : "ChevronDown"} className="text-slate-500" />
+                      </button>
+
+                      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${openAccordions.distribucion ? 'max-h-[500px] opacity-100 pt-4' : 'max-h-0 opacity-0'}`}>
+                        <div className="space-y-4">
+                          <div className="flex gap-2">
+                            <input 
+                              type="text" 
+                              placeholder="Agregar destinatario..."
+                              value={newDistributionItem}
+                              onChange={(e) => setNewDistributionItem(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && addDistribution()}
+                              className="flex-grow p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:outline-none"
+                            />
+                            <button 
+                              onClick={addDistribution}
+                              className="bg-indigo-600 shrink-0 text-white px-3.5 rounded-xl hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                            >
+                              <Icon name="Plus" />
+                            </button>
+                          </div>
+
+                          <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                            {oficio.distribuciones.map((dist, idx) => (
+                              <div key={idx} className="flex justify-between items-center bg-slate-950 p-2 rounded-lg border border-slate-900 hover:border-slate-800 transition-colors">
+                                <span className="text-[10px] text-slate-400 font-mono truncate max-w-[85%]">
+                                  {idx + 1}. {dist}
+                                </span>
+                                <button 
+                                  onClick={() => removeDistribution(idx)}
+                                  className="text-rose-500 p-1 hover:bg-rose-500/10 rounded-lg transition-colors flex-shrink-0 cursor-pointer"
+                                >
+                                  <Icon name="Trash2" className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {!openAccordions.distribucion && (
+                        <div className="pt-4 space-y-1">
+                          {oficio.distribuciones.slice(0, 3).map((dist, idx) => (
+                            <div key={idx} className="text-[10px] font-mono text-slate-500 truncate">• {dist}</div>
+                          ))}
+                          {oficio.distribuciones.length > 3 && <div className="text-[9.5px] italic text-slate-650 pl-3">y {oficio.distribuciones.length - 3} más...</div>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pt-4 max-w-md mx-auto">
+                    <button 
+                      onClick={() => setActiveTab('calificar')}
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl font-bold text-xs tracking-wider shadow-lg flex items-center justify-center space-x-2 transition-all active:scale-95 cursor-pointer"
+                    >
+                      <span>INGRESAR PAUTAS DE CALIFICACIÓN</span>
+                      <Icon name="ChevronRight" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: CALIFICACIÓN */}
+              {activeTab === 'calificar' && (
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                  
+                  {/* Left Column: Sliders */}
+                  <div class="col-span-1 lg:col-span-7 space-y-6">
+                    <div className="grid grid-cols-3 gap-2 bg-slate-900 border border-slate-850 p-1 rounded-2xl shadow-xl">
+                      <button
+                        onClick={() => setActiveRubroTab('A')}
+                        className={`py-2.5 px-2 text-[10px] uppercase font-bold tracking-wider rounded-xl text-center transition-all cursor-pointer ${
+                          activeRubroTab === 'A' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800/40'
+                        }`}
+                      >
+                        D. Técnica (60%)
+                      </button>
+                      <button
+                        onClick={() => setActiveRubroTab('B')}
+                        className={`py-2.5 px-2 text-[10px] uppercase font-bold tracking-wider rounded-xl text-center transition-all cursor-pointer ${
+                          activeRubroTab === 'B' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800/40'
+                        }`}
+                      >
+                        Admin & Legal (30%)
+                      </button>
+                      <button
+                        onClick={() => setActiveRubroTab('C')}
+                        className={`py-2.5 px-2 text-[10px] uppercase font-bold tracking-wider rounded-xl text-center transition-all cursor-pointer ${
+                          activeRubroTab === 'C' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800/40'
+                        }`}
+                      >
+                        Ambiental (10%)
+                      </button>
+                    </div>
+
+                    <div className={`p-4 rounded-2xl border ${
+                      activeRubroTab === 'A' ? 'bg-indigo-950/15 border-indigo-500/15 text-indigo-200' :
+                      activeRubroTab === 'B' ? 'bg-emerald-950/15 border-emerald-500/15 text-emerald-200' :
+                      'bg-amber-950/25 border-amber-500/15 text-amber-200'
+                    } shadow-lg`}>
+                      <h3 className="text-xs font-bold leading-none mb-1.5 uppercase tracking-wider text-white">
+                        {activeRubroTab === 'A' ? 'RUBRO A : DIRECCIÓN TÉCNICA (60% PESO)' :
+                         activeRubroTab === 'B' ? 'RUBRO B : LEGAL, LABORAL & ADMIN (30% PESO)' :
+                         'RUBRO C : COMPROMISO MEDIOAMBIENTAL & VECINAL (10% PESO)'}
+                      </h3>
+                      <p className="text-[11px] opacity-80 leading-relaxed">
+                        {activeRubroTab === 'A' ? 'Evalúa el rigor ingenieril del proyecto, calidad de acabados, ritmo constructivo, maquinaria dispuesta y competencia técnica del personal.' :
+                         activeRubroTab === 'B' ? 'Audita la velocidad de tramitaciones ante SERVIU, cumplimiento de leyes previsionales y normativas de prevención de riesgos.' :
+                         'Evalúa la mitigación de ruidos molestos, suspensión de polvo en suspensión y el contacto respetuoso con juntas vecinales locales.'}
+                      </p>
+                    </div>
+
+                    <div class="space-y-4">
+                      {rubrosConfig.find(r => r.id === activeRubroTab)?.subfactors.map((sub) => {
+                        const currentVal = scores[sub.id] || 0;
+                        const ratio = currentVal / sub.puntosMaximos;
+                        
+                        let tagClass = "bg-rose-500/10 text-rose-400 border-rose-500/20";
+                        let ratingWord = "Deficiente";
+                        
+                        if (ratio >= 0.90) {
+                          tagClass = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+                          ratingWord = "Excelente";
+                        } else if (ratio >= 0.75) {
+                          tagClass = "bg-indigo-500/10 text-indigo-400 border-indigo-500/20";
+                          ratingWord = "Bueno / Notable";
+                        } else if (ratio >= 0.50) {
+                          tagClass = "bg-amber-500/10 text-amber-400 border-amber-500/20";
+                          ratingWord = "Aceptable";
+                        } else if (ratio >= 0.25) {
+                          tagClass = "bg-orange-500/10 text-orange-400 border-orange-500/20";
+                          ratingWord = "Regular Bajo";
+                        }
+
+                        const sliderColor = activeRubroTab === 'A' ? '#6366f1' : activeRubroTab === 'B' ? '#10b981' : '#f59e0b';
+
+                        return (
+                          <div key={sub.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between shadow-lg hover:border-slate-700 transition-all duration-200">
+                            <div className="flex justify-between items-start gap-3">
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[9px] font-mono font-bold text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/10">
+                                    {sub.id}
+                                  </span>
+                                  <h4 className="text-xs font-bold text-white tracking-tight">
+                                    {sub.nombre}
+                                  </h4>
+                                </div>
+                                <p className="text-[10px] text-slate-400 mt-1.5 leading-snug">
+                                  {sub.descripcion}
+                                </p>
+                              </div>
+
+                              <div className="flex flex-col items-end flex-shrink-0">
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${tagClass} leading-none mb-1.5`}>
+                                  {ratingWord}
+                                </span>
+                                <div>
+                                  <span className="text-lg font-black font-mono text-white">{currentVal}</span>
+                                  <span className="text-[10px] text-slate-500 font-mono">/{sub.puntosMaximos}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Slider bar row */}
+                            <div className="flex items-center space-x-3 my-4">
+                              <button
+                                onClick={() => handleScoreChange(sub.id, Math.max(0, currentVal - 1))}
+                                className="bg-slate-950 p-2 rounded-xl border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 font-bold text-[11px] w-9 h-9 flex items-center justify-center active:scale-95 transition-all cursor-pointer"
+                              >
+                                -1
+                              </button>
+
+                              <input 
+                                type="range"
+                                min="0"
+                                max={sub.puntosMaximos}
+                                step="1"
+                                value={currentVal}
+                                onChange={(e) => handleScoreChange(sub.id, Number(e.target.value))}
+                                className="w-full h-1.5 bg-slate-950 rounded-lg appearance-none cursor-pointer focus:outline-none"
+                                style={{
+                                  background: `linear-gradient(to right, ${sliderColor} ${ratio * 100}%, #1e293b ${ratio * 100}%)`,
+                                  accentColor: sliderColor
+                                }}
+                              />
+
+                              <button
+                                onClick={() => handleScoreChange(sub.id, Math.min(sub.puntosMaximos, currentVal + 1))}
+                                className="bg-slate-950 p-2 rounded-xl border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 font-bold text-[11px] w-9 h-9 flex items-center justify-center active:scale-95 transition-all cursor-pointer"
+                              >
+                                +1
+                              </button>
+                            </div>
+
+                            {/* Preset Buttons */}
+                            <div className="grid grid-cols-4 gap-1.5 pt-1">
+                              {[{ label: 'Def (0)', perc: 0 }, { label: 'Reg (50%)', perc: 50 }, { label: 'Not (85%)', perc: 85 }, { label: 'Exc (100%)', perc: 100 }].map((pr) => {
+                                const val = Math.round(sub.puntosMaximos * (pr.perc / 100));
+                                return (
+                                  <button
+                                    key={pr.label}
+                                    onClick={() => applyPresetScore(sub.id, pr.perc, sub.puntosMaximos)}
+                                    className={`text-[9.5px]/none py-1.5 font-bold rounded-lg border text-center transition-all cursor-pointer ${
+                                      currentVal === val 
+                                        ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-black' 
+                                        : 'bg-slate-950 text-slate-400 border-slate-800/85 hover:border-slate-700'
+                                    }`}
+                                  >
+                                    {pr.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Simulation Settings Board */}
+                    <div className="bg-slate-900 border border-slate-850 rounded-2xl p-5 shadow-lg">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1 font-mono tracking-wider">
+                        PREAJUSTES DE SIMULACIÓN INTEGRAL (D.S. 127)
+                      </span>
+                      <p className="text-[10.5px] text-slate-400 mb-4 leading-relaxed">
+                        Utilice estos accesos rápidos para simular puntajes de calibración en bloque a nivel de contrato.
+                      </p>
+                      <div className="grid grid-cols-3 gap-2.5">
+                        <button
+                          onClick={() => resetOrMaxScores('min')}
+                          className="bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 rounded-xl py-2.5 text-center text-xs font-bold active:scale-95 transition-all cursor-pointer"
+                        >
+                          Mínimo (~3.0)
+                        </button>
+                        <button
+                          onClick={() => resetOrMaxScores('med')}
+                          className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 rounded-xl py-2.5 text-center text-xs font-bold active:scale-95 transition-all cursor-pointer"
+                        >
+                          Regular (~5.2)
+                        </button>
+                        <button
+                          onClick={() => resetOrMaxScores('max')}
+                          className="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-xl py-2.5 text-center text-xs font-bold active:scale-95 transition-all cursor-pointer"
+                        >
+                          Excelente (7.0)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-4">
+                      {activeRubroTab !== 'C' ? (
+                        <button
+                          onClick={() => {
+                            if (activeRubroTab === 'A') setActiveRubroTab('B');
+                            else if (activeRubroTab === 'B') setActiveRubroTab('C');
+                          }}
+                          className="w-full bg-slate-900 border border-slate-800 text-white font-bold text-xs py-4 rounded-xl hover:bg-slate-800 flex items-center justify-center space-x-1 active:scale-95 transition-all cursor-pointer"
+                        >
+                          <span>SIGUIENTE RUBRO EVALUATIVO</span>
+                          <Icon name="ChevronRight" className="text-indigo-400" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setActiveTab('resultados')}
+                          className="w-full bg-indigo-600 text-white font-bold text-xs py-4 rounded-xl hover:bg-indigo-700 flex items-center justify-center space-x-2 active:scale-95 transition-all cursor-pointer shadow-lg"
+                        >
+                          <Icon name="CheckCircle2" />
+                          <span>CALCULAR Y GENERAR REPORTES</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Column: Live highlights */}
+                  <div class="col-span-1 lg:col-span-5 lg:sticky lg:top-24 space-y-6">
+                    <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl relative overflow-hidden">
+                      <div class="absolute top-0 right-0 w-32 h-32 bg-indigo-950/20 rounded-full blur-2xl -mr-12 -mt-12"></div>
+                      <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest font-mono">SITUACIÓN MÉTRICA EN VIVO</p>
+                      <h3 className="text-xs font-bold text-slate-300 truncate mt-1 uppercase max-w-[270px]">
+                        {contractor.nombreContratista || 'No especificado'}
+                      </h3>
+
+                      <div className="py-6 flex flex-col items-center justify-center text-center">
+                        <div className="relative flex items-center justify-center">
+                          {/* Round progress gauge representation */}
+                          <div className="w-40 h-40 rounded-full border-[10px] border-slate-950 flex flex-col items-center justify-center relative">
+                            <span className="text-4-- text-4xl font-extrabold text-white tracking-tighter">
+                              {ratingDetails.finalGrade.toFixed(1)}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-mono tracking-widest font-bold uppercase mt-0.5">Nota</span>
+                          </div>
+                          <svg className="absolute top-0 left-0 w-40 h-40 -rotate-90">
+                            <circle 
+                              cx="80" 
+                              cy="80" 
+                              r="70" 
+                              fill="transparent" 
+                              stroke="#6366f1" 
+                              strokeWidth="10" 
+                              strokeDasharray="440" 
+                              strokeDashoffset={440 - (440 * (ratingDetails.totalScoreOutof100 / 100))} 
+                              strokeLinecap="round" 
+                              className="transition-all duration-300"
+                            />
+                          </svg>
+                        </div>
+                        
+                        <p className="mt-4 text-xs font-bold text-indigo-400 uppercase tracking-wide">
+                          {qualificationClassification.title}
+                        </p>
+                        <p className="text-slate-500 text-[10px] mt-1.5 px-4 leading-normal italic">
+                          "{qualificationClassification.desc}"
+                        </p>
+                      </div>
+
+                      <div className="border-t border-slate-800/85 pt-4 space-y-3 font-mono">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-500">PUNTAJE MULTI-RUBRO:</span>
+                          <span className="font-bold text-white">
+                            {ratingDetails.totalScoreOutof100.toFixed(2)} / 100
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-1.5 h-1.5 bg-slate-950 rounded-full overflow-hidden">
+                          <div className="bg-indigo-500 h-full" style={{ width: `${(ratingDetails.weightedA / 60) * 100}%` }}></div>
+                          <div className="bg-emerald-500 h-full" style={{ width: `${(ratingDetails.weightedB / 30) * 100}%` }}></div>
+                          <div className="bg-amber-500 h-full" style={{ width: `${(ratingDetails.weightedC / 10) * 100}%` }}></div>
+                        </div>
+
+                        <div className="flex flex-col gap-1 text-[9px] text-slate-400">
+                          <div className="flex justify-between">
+                            <span>• A - Dirección Técnica (60%):</span>
+                            <span className="text-slate-300 font-bold">{ratingDetails.weightedA.toFixed(1)} ptos</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>• B - Admin & Legal (30%):</span>
+                            <span className="text-slate-300 font-bold">{ratingDetails.weightedB.toFixed(1)} ptos</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>• C - Socio-Ambiental (10%):</span>
+                            <span className="text-slate-300 font-bold">{ratingDetails.weightedC.toFixed(1)} ptos</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="h-[1px] bg-slate-800 w-full my-4"></div>
+                      <div className="flex items-center gap-2 text-[9px] text-slate-500 font-mono font-bold uppercase">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span>Sintonizado con D.S. 127/77 MINVU</span>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              )}
+
+              {/* TAB 3: REPORTES & EXPORTACIÓN */}
+              {activeTab === 'resultados' && (
+                <div class="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
+                    {/* Visual Score Summary Box */}
+                    <div className="col-span-1 md:col-span-5 bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between shadow-xl relative overflow-hidden">
+                      <div class="absolute -right-6 -bottom-6 w-36 h-36 bg-indigo-950/30 rounded-full blur-2xl"></div>
+                      <div>
+                        <h3 className="font-bold text-slate-300 text-xs tracking-wider uppercase font-mono">
+                          RESULTADO DE EVALUACIÓN FINAL
+                        </h3>
+                        <div className="h-[1px] bg-slate-800/80 w-full my-4"></div>
+                      </div>
+
+                      <div className="flex-grow flex flex-col items-center justify-center text-center py-4">
+                        <div className="relative flex items-center justify-center">
+                          <div className="w-44 h-44 rounded-full border-[12px] border-slate-950 flex items-center justify-center">
+                            <span className="text-5xl font-black text-white tracking-tighter">
+                              {ratingDetails.finalGrade.toFixed(1)}
+                            </span>
+                          </div>
+                          <svg className="absolute top-0 left-0 w-44 h-44 -rotate-90">
+                            <circle 
+                              cx="88" 
+                              cy="88" 
+                              r="76" 
+                              fill="transparent" 
+                              stroke="#6366f1" 
+                              strokeWidth="12" 
+                              strokeDasharray="477" 
+                              strokeDashoffset={477 - (477 * (ratingDetails.totalScoreOutof100 / 100))} 
+                              strokeLinecap="round" 
+                              className="transition-all duration-300"
+                            />
+                          </svg>
+                        </div>
+                        
+                        <p className="mt-6 text-sm font-extrabold text-indigo-300 uppercase tracking-widest font-display">
+                          EVALUACIÓN: {qualificationClassification.title}
+                        </p>
+                        <p className="text-slate-400 text-[10.5px] mt-2 px-3 italic leading-relaxed">
+                          "{qualificationClassification.desc}"
+                        </p>
+                      </div>
+
+                      <div className="border-t border-slate-850 pt-4 text-center font-mono text-[10px] text-slate-500 uppercase">
+                        DECRETO N° 127 DE 1977 MINVU
+                      </div>
+                    </div>
+
+                    {/* Download Actions Panel */}
+                    <div className="col-span-1 md:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between shadow-xl">
+                      <div>
+                        <h3 className="font-bold text-slate-300 text-xs tracking-wider uppercase font-mono">
+                          EXPORTACIÓN DE ARCHIVOS OFICIALES
+                        </h3>
+                        <div className="h-[1px] bg-slate-800/80 w-full my-4"></div>
+                      </div>
+
+                      <div className="space-y-4 my-2">
+                        <p className="text-xs text-slate-450 leading-relaxed">
+                          Descargue los documentos oficiales validados automáticamente basándose en los parámetros calculados por la ITO según los criterios legales de la orden.
+                        </p>
+
+                        <button
+                          onClick={downloadBoth}
+                          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-xl active:scale-95 transition-all flex items-center justify-between text-xs cursor-pointer border border-indigo-500/35"
+                        >
+                          <div className="flex items-center space-x-2.5 text-left">
+                            <div className="bg-white/10 p-1.5 rounded-lg">
+                              <Icon name="Download" className="w-4 h-4 text-white" />
+                            </div>
+                            <div>
+                              <span className="block font-bold uppercase tracking-wider text-[11px]">DESCARGAR PAQUETE COMPLETO</span>
+                              <span className="text-[9.5px] text-indigo-200 font-normal">Oficio Electrónico + Ficha Técnica Formato 1a</span>
+                            </div>
+                          </div>
+                          <Icon name="ChevronRight" className="text-white" />
+                        </button>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                          <button
+                            onClick={downloadOficio}
+                            className="bg-slate-950 text-slate-300 border border-slate-850 hover:bg-slate-800/40 hover:text-white font-bold py-3 px-3.5 rounded-xl transition-all active:scale-95 text-xs flex items-center justify-between gap-2 cursor-pointer"
+                          >
+                            <span className="truncate tracking-wide text-[10.5px] font-medium">1. Oficio de Envío (ORD.)</span>
+                            <Icon name="FileText" className="text-slate-500 w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            onClick={downloadFormato1a}
+                            className="bg-slate-950 text-slate-300 border border-slate-850 hover:bg-slate-800/40 hover:text-white font-bold py-3 px-3.5 rounded-xl transition-all active:scale-95 text-xs flex items-center justify-between gap-2 cursor-pointer"
+                          >
+                            <span className="truncate tracking-wide text-[10.5px] font-medium">2. Ficha Técnica 1a (MINVU)</span>
+                            <Icon name="SlidersHorizontal" className="text-slate-500 w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="pt-4 border-t border-slate-850 flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-slate-950 flex items-center justify-center text-indigo-400 font-bold font-mono text-xs border border-slate-800">
+                          IF
+                        </div>
+                        <div>
+                          <p className="text-[9px] text-slate-500 uppercase tracking-widest font-mono">Firma Sello Autorizado</p>
+                          <p className="text-xs font-bold text-white uppercase">{oficio.remitenteNombre}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* PAPER LOOK PREVIEW BOARD */}
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider font-mono">
+                        Vista Previa Digital • Oficio de Notificación Ordinario
+                      </span>
+                      <div className="h-[1px] bg-slate-800/80 w-full my-3"></div>
+                    </div>
+
+                    <div className="bg-slate-950 border border-slate-900 rounded-xl p-5 sm:p-6 text-slate-300 text-[10px] leading-relaxed max-h-96 overflow-y-auto font-sans space-y-4 select-text">
+                      <div className="flex justify-between items-start border-b border-slate-900 pb-3 flex-wrap gap-2">
+                        <div className="font-display">
+                          <strong className="text-white uppercase tracking-tight text-xs">MINISTERIO DE VIVIENDA Y URBANISMO</strong><br/>
+                          <span className="text-slate-500 text-[8px] tracking-widest uppercase mt-0.5 block font-semibold">SERVIU REGIONAL GOBIERNO DE CHILE</span>
+                        </div>
+                        <div className="text-right text-[8px] font-mono text-slate-400 space-y-0.5">
+                          <div><strong>ORD. Nº:</strong> {oficio.ordenNro || '3411'}</div>
+                          <div className="truncate max-w-[190px]"><strong>ANT:</strong> {oficio.antecedentes}</div>
+                          <div className="truncate max-w-[190px]"><strong>MAT:</strong> {oficio.materia}</div>
+                          <div><strong>ADJ:</strong> {oficio.adjuntos}</div>
+                        </div>
+                      </div>
+
+                      <div className="text-slate-400 uppercase tracking-wide font-mono text-[8.5px]">
+                        {oficio.ciudad}, {oficio.fechaEmision}
+                      </div>
+
+                      <div className="space-y-1 font-mono text-[9px] uppercase tracking-wide py-1 border-l-2 border-indigo-650 pl-3">
+                        <div><strong>A : {contractor.nombreContratista}</strong> - CONTRATISTA EVALUADO</div>
+                        <div><strong>DE : {oficio.remitenteNombre}</strong> - {oficio.remitenteCargo}</div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <p>1. Me dirijo a usted de conformidad con el D.S. Nº 127 de 1977 (V. y U.) a fin de notificar formalmente el resultado de la calificación asignada por esta delegación a la obra que se detalla a continuación:</p>
+                        
+                        <div className="bg-slate-900/40 border border-slate-900 rounded-xl p-4 font-mono text-[9px] text-slate-300 space-y-1.5 leading-relaxed">
+                          <div>• <strong>MONTO CONTRATO VIGENTE:</strong> ${work.montoContratoVigente.toLocaleString('es-CL')}</div>
+                          <div>• <strong>TÍTULO COMPLETO DEL PROYECTO:</strong> {work.nombreObra}</div>
+                          <div>• <strong>CÓDIGO OFICIAL / EXPEDIENTE:</strong> {work.proyectoCodigo}</div>
+                          <div>• <strong>COMUNA DEL CONTRATO:</strong> {work.comuna}</div>
+                          <div>• <strong>FECHA DE RECEPCIÓN ÚNICA:</strong> {work.fechaRecepcionUnica}</div>
+                          <div>• <strong>PUNTAJE FINAL CONVERTIDO:</strong> <span className="text-indigo-400 font-bold">{ratingDetails.totalScoreOutof100.toFixed(2)} / 100 ptos</span> (CONVERSIÓN NOTA: <span className="text-white font-extrabold text-xs">{ratingDetails.finalGrade.toFixed(1)}</span>)</div>
+                        </div>
+                      </div>
+
+                      <p>2. Se hace saber a la empresa contratista evaluada que, contra esta calificación, podrá interponer Recurso de Apelación jerárquico que corresponda para ante el Sr. Director del Servicio en el marco legal de lo contenido en la Ley N° 19.880.</p>
+                      <p className="font-medium">Saluda atentamente a usted,</p>
+
+                      <div className="text-center pt-4">
+                        <div className="border-t border-slate-900 pt-2.5 inline-block px-6">
+                          <strong className="text-white font-display text-[10.5px] uppercase">{oficio.remitenteNombre}</strong><br/>
+                          <span className="text-slate-500 text-[8px] normal-case mt-0.5 block font-semibold">{oficio.remitenteCargo}</span>
+                        </div>
+                      </div>
+
+                      <div className="pt-3 border-t border-slate-900 text-[8px] text-slate-505 font-mono space-y-0.5">
+                        <strong className="text-slate-400 block mb-1 font-semibold uppercase">DISTRIBUCIÓN:</strong>
+                        {oficio.distribuciones.map((d, index) => (
+                          <div key={index} className="truncate">- {index + 1}.- {d}</div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            </main>
+
+            {/* Bottom sticky bar (Bento-style representation for mobile compatibility) */}
+            <footer className="fixed bottom-0 left-0 right-0 bg-slate-950/90 backdrop-blur-md border-t border-slate-900 md:border-none shadow-2xl px-3 py-3.5 z-40 max-w-lg mx-auto md:rounded-t-2xl md:mb-2 text-slate-400">
+              <div className="grid grid-cols-3 text-center">
+                <button
+                  onClick={() => setActiveTab('ficha')}
+                  className={`flex flex-col items-center justify-center py-1 rounded-xl transition-all cursor-pointer ${
+                    activeTab === 'ficha' ? 'text-indigo-400 font-bold scale-105' : 'text-slate-500 hover:text-slate-350'
+                  }`}
+                >
+                  <Icon name="Building" className="w-5 h-5 mb-0.5" />
+                  <span className="text-[10px] tracking-tight">1. Ficha</span>
+                </button>
+                
+                <button
+                  onClick={() => setActiveTab('calificar')}
+                  className={`flex flex-col items-center justify-center py-1 rounded-xl transition-all cursor-pointer ${
+                    activeTab === 'calificar' ? 'text-indigo-400 font-bold scale-105' : 'text-slate-500 hover:text-slate-350'
+                  }`}
+                >
+                  <Icon name="SlidersHorizontal" className="w-5 h-5 mb-0.5" />
+                  <span className="text-[10px] tracking-tight">2. Calificar</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('resultados')}
+                  className={`flex flex-col items-center justify-center py-1 rounded-xl transition-all cursor-pointer ${
+                    activeTab === 'resultados' ? 'text-indigo-400 font-bold scale-105' : 'text-slate-500 hover:text-slate-350'
+                  }`}
+                >
+                  <Icon name="Download" className="w-5 h-5 mb-0.5" />
+                  <span className="text-[10px] tracking-tight">3. Exportar</span>
+                </button>
+              </div>
+            </footer>
+          </div>
+        );
+      }
+
+      // Render React App
+      const rootElement = document.getElementById('root');
+      const root = ReactDOM.createRoot(rootElement);
+      root.render(<App />);
+    </script>
+  </body>
+</html>
